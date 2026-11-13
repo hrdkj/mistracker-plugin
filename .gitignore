@@ -1,0 +1,5 @@
+node_modules/
+.sdk/
+dist/
+*.tsbuildinfo
+release/
