@@ -9,6 +9,9 @@ const ICON_OPEN = svg('<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 
 const ICON_EDIT = svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>');
 const ICON_DELETE = svg('<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>');
 
+/** Matches the max-height of `.mt-clamp.mt-clamped` in styles.css (about 6 lines). */
+const PROBLEM_CLAMP_PX = 150;
+
 interface LibraryData { entries: Entry[]; subjects: string[] }
 
 export function mountLibrary(ctx: PluginFrontendContext, container: HTMLElement, viewSignal: AbortSignal): () => void {
@@ -53,7 +56,9 @@ export function mountLibrary(ctx: PluginFrontendContext, container: HTMLElement,
 			title: "Delete mistake",
 			content: (body, signal) => {
 				const box = el(doc, "div", "mt-root mt-dialog");
-				box.append(el(doc, "h2", "mt-dialog-title", "Delete this mistake?"), el(doc, "p", "mt-text", `“${entry.concept}” will be removed permanently.`));
+				const concept = el(doc, "div", "mt-concept mt-text");
+				box.append(el(doc, "h2", "mt-dialog-title", "Delete this mistake?"), concept, el(doc, "p", "mt-muted", "It will be removed permanently."));
+				ctx.ui.mountMarkdown(concept, { text: entry.concept }, { signal });
 				const error = el(doc, "p", "mt-error");
 				const actions = el(doc, "div", "mt-actions");
 				box.append(error, actions);
@@ -75,6 +80,39 @@ export function mountLibrary(ctx: PluginFrontendContext, container: HTMLElement,
 		}, { signal: viewSignal });
 	};
 
+	/** Long problems are clipped to ~6 lines with a fade and a Show more / Show less toggle. */
+	const mountClampedProblem = (parent: HTMLElement, text: string, signal: AbortSignal) => {
+		const clamp = el(doc, "div", "mt-clamp");
+		const markdown = el(doc, "div", "mt-problem");
+		clamp.append(markdown);
+		const toggle = el(doc, "button", "mt-toggle", "Show more");
+		toggle.type = "button";
+		toggle.hidden = true;
+		toggle.setAttribute("aria-expanded", "false");
+		parent.append(clamp, toggle);
+		let expanded = false;
+		const update = () => {
+			const overflowing = markdown.scrollHeight > PROBLEM_CLAMP_PX + 8;
+			toggle.hidden = !overflowing;
+			clamp.classList.toggle("mt-clamped", overflowing && !expanded);
+		};
+		toggle.addEventListener("click", () => {
+			expanded = !expanded;
+			toggle.textContent = expanded ? "Show less" : "Show more";
+			toggle.setAttribute("aria-expanded", String(expanded));
+			update();
+		}, { signal });
+		// Markdown, math and diagrams render asynchronously, so re-measure on every size change.
+		const view = doc.defaultView;
+		if (view?.ResizeObserver) {
+			const observer = new view.ResizeObserver(update);
+			observer.observe(markdown);
+			signal.addEventListener("abort", () => observer.disconnect(), { once: true });
+		}
+		ctx.ui.mountMarkdown(markdown, { text }, { signal });
+		update();
+	};
+
 	const COLUMNS = ["Concept", "Problem", "Why it happened", "How to avoid", ""] as const;
 
 	const cell = (label: string, className: string) => {
@@ -86,13 +124,12 @@ export function mountLibrary(ctx: PluginFrontendContext, container: HTMLElement,
 	const renderRow = (entry: Entry, signal: AbortSignal) => {
 		const row = el(doc, "tr", "mt-row");
 		const concept = cell("Concept", "mt-col-concept");
-		concept.append(el(doc, "div", "mt-concept", entry.concept));
+		const conceptText = el(doc, "div", "mt-concept");
+		concept.append(conceptText);
+		ctx.ui.mountMarkdown(conceptText, { text: entry.concept }, { signal });
 		const problem = cell("Problem", "mt-col-problem");
-		if (entry.problemStatement) {
-			const markdown = el(doc, "div", "mt-problem");
-			problem.append(markdown);
-			ctx.ui.mountMarkdown(markdown, { text: entry.problemStatement }, { signal });
-		} else problem.append(el(doc, "span", "mt-muted", "—"));
+		if (entry.problemStatement) mountClampedProblem(problem, entry.problemStatement, signal);
+		else problem.append(el(doc, "span", "mt-muted", "—"));
 		const markdownCell = (label: string, className: string, text: string) => {
 			const td = cell(label, className);
 			const box = el(doc, "div", "mt-text");

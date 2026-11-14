@@ -101,7 +101,9 @@ export function renderFields(doc: Document, fields: EntryFields, mountText?: Tex
 	const box = el(doc, "div", "mt-fields");
 	const meta = el(doc, "div", "mt-meta");
 	meta.append(el(doc, "span", "mt-chip", fields.subject), el(doc, "span", "mt-chip", fields.mistakeType), el(doc, "span", "mt-chip mt-chip-muted", fields.missClass));
-	box.append(el(doc, "div", "mt-concept", fields.concept), meta);
+	const concept = el(doc, "div", "mt-concept mt-text");
+	if (mountText) mountText(concept, fields.concept); else concept.textContent = fields.concept;
+	box.append(concept, meta);
 	for (const [label, text] of [["Why it happened", fields.whyHappened], ["How to avoid", fields.howToAvoid]] as const) {
 		const section = el(doc, "div", "mt-section");
 		const body = el(doc, "div", "mt-text");

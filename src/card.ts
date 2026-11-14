@@ -56,7 +56,9 @@ export function mountCard(ctx: PluginFrontendContext, container: HTMLElement, to
 		if (entry.status === "saved") {
 			root.classList.add("mt-card-compact");
 			const line = el(doc, "div", "mt-status-line");
-			line.append(el(doc, "span", "mt-status mt-status-saved", "Saved to Mistracker"), el(doc, "span", "mt-muted", ` · ${entry.subject} · ${entry.concept}`));
+			const concept = el(doc, "span", "mt-muted mt-inline-md");
+			line.append(el(doc, "span", "mt-status mt-status-saved", "Saved to Mistracker"), el(doc, "span", "mt-muted", ` · ${entry.subject} · `), concept);
+			ctx.ui.mountMarkdown(concept, { text: entry.concept }, { signal });
 			root.append(line);
 			button(ctx, line, signal, { label: "Open library", variant: "link", onClick: () => ctx.app.openView("library") });
 			return;
@@ -64,7 +66,9 @@ export function mountCard(ctx: PluginFrontendContext, container: HTMLElement, to
 		if (entry.status === "dismissed") {
 			root.classList.add("mt-card-compact");
 			const line = el(doc, "div", "mt-status-line");
-			line.append(el(doc, "span", "mt-status", "Mistake proposal dismissed"), el(doc, "span", "mt-muted", ` · ${entry.concept}`));
+			const concept = el(doc, "span", "mt-muted mt-inline-md");
+			line.append(el(doc, "span", "mt-status", "Mistake proposal dismissed"), el(doc, "span", "mt-muted", " · "), concept);
+			ctx.ui.mountMarkdown(concept, { text: entry.concept }, { signal });
 			root.append(line);
 			return;
 		}

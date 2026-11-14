@@ -54,6 +54,13 @@
 .mt-root .mt-icon-actions { display: flex; justify-content: flex-end; gap: 2px; }
 .mt-root .mt-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .mt-root .mt-problem { font-size: 13px; }
+.mt-root .mt-clamp.mt-clamped { max-height: 150px; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 65%, transparent); mask-image: linear-gradient(to bottom, #000 65%, transparent); }
+.mt-root .mt-toggle { margin-top: 4px; padding: 0; border: 0; background: none; color: var(--primary, inherit); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.mt-root .mt-toggle:hover { text-decoration: underline; }
+.mt-root .mt-toggle:focus-visible { outline: 2px solid var(--ring, #60a5fa); outline-offset: 2px; border-radius: 2px; }
+.mt-root .mt-toggle[hidden] { display: none; }
+/* Concept rendered as Markdown inside a one-line status. */
+.mt-root .mt-inline-md, .mt-root .mt-inline-md > * { display: inline; margin: 0; }
 
 /* Compact code blocks: no gutter/header, wrapped lines, minimal padding. */
 .mt-root [data-streamdown="code-block"] { margin: 6px 0; padding: 0; gap: 0; border: 0; background: transparent; }

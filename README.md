@@ -29,12 +29,14 @@ tracker in its replies; the card is the only trace.
 
 Each entry has:
 
-- Subject and concept
+- Subject and concept (the concept renders Markdown and LaTeX)
 - Mistake type: Conceptual, New info/detail, Calculation or Memory/Formula
 - Miss class, the same one the practice agent uses when it concludes: cue,
   discrimination, execution, careless or structural
-- Why it happened and how to avoid it (Markdown and math supported)
-- The problem statement and a link back to the session
+- Why it happened and how to avoid it: short, first-person notes written for a quick
+  scan before an exam (Markdown, LaTeX math and code blocks supported)
+- The problem statement and a link back to the session. Long problems are clipped to
+  about six lines in the library, with a **Show more** toggle
 
 Everything is editable afterwards:
 

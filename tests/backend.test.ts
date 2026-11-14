@@ -137,3 +137,12 @@ test("plugin problem poses are recognized through their snapshot", () => {
 	assert.equal(statement, "Reverse a list.");
 	assert.equal(latestProblemStatement([]), undefined);
 });
+
+test("instructions ask for short human notes with LaTeX and code formatting", () => {
+	const { registrations } = setup();
+	const text = (registrations.instructions[0] as { text: string }).text;
+	assert.match(text, /first person/);
+	assert.match(text, /Do not write "the learner"/);
+	assert.match(text, /LaTeX: `\$\.\.\.\$` inline/);
+	assert.match(text, /fenced code blocks with a language tag/);
+});
