@@ -45,7 +45,8 @@ Everything is editable afterwards:
 Dismiss and Delete can be undone. A dismissed proposal keeps an **Undo** link on its
 session card, and a deleted entry collapses to an **Undo** row in the library and on its
 session card. Dismissed and deleted entries are kept for 7 days, then removed for good the
-next time LearnHarness starts.
+next time LearnHarness starts. Proposals you never save or dismiss are removed the same way,
+7 days after they were proposed.
 
 ## Install
 

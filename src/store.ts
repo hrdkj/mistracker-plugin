@@ -69,12 +69,12 @@ export function savedSubjects(state: StoreState): string[] {
 	return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name]) => name);
 }
 
-/** Remove dismissed and deleted entries last changed more than the retention window ago.
- * Returns the number removed. */
+/** Remove unsaved entries (pending, dismissed or deleted) last changed more than the
+ * retention window ago. Saved entries are never pruned. Returns the number removed. */
 export function pruneEntries(state: StoreState, now: number): number {
 	let removed = 0;
 	for (const [id, entry] of Object.entries(state.entries)) {
-		if (entry.status !== "dismissed" && entry.status !== "deleted") continue;
+		if (entry.status === "saved") continue;
 		const changed = Date.parse(entry.updatedAt);
 		if (Number.isNaN(changed) || now - changed <= UNDO_RETENTION_MS) continue;
 		delete state.entries[id];

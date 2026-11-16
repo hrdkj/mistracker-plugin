@@ -19,7 +19,7 @@ function entryOf(store: Store, id: unknown, status?: Entry["status"]): Entry {
 
 export function activate(ctx: PluginBackendContext): void {
 	const store = openStore(ctx.dataDirectory);
-	// Prune expired dismissed/deleted entries; write only when something expired.
+	// Prune expired unsaved entries; write only when something expired.
 	const now = Date.now();
 	if (pruneEntries(structuredClone(store.get()), now) > 0) store.change(state => pruneEntries(state, now));
 	const notify = () => { if (!ctx.signal.aborted) ctx.events.emit(CHANGED_TOPIC); };

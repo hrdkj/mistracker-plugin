@@ -118,7 +118,7 @@ test("undo restores dismissed proposals to pending and deleted entries to saved"
 	await assert.rejects(async () => call("restore-entry", { id: "nope" }), /no longer exists/);
 });
 
-test("startup prunes dismissed and deleted entries older than 7 days", () => {
+test("startup prunes pending, dismissed and deleted entries older than 7 days", () => {
 	const dataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "mistracker-test-"));
 	const file = path.join(dataDirectory, STORE_FILE);
 	const day = 24 * 60 * 60 * 1000;
@@ -130,13 +130,14 @@ test("startup prunes dismissed and deleted entries older than 7 days", () => {
 		freshDismissed: entry("freshDismissed", "dismissed", ago(6)),
 		freshDeleted: entry("freshDeleted", "deleted", ago(6)),
 		oldSaved: entry("oldSaved", "saved", ago(60)),
-		oldPending: entry("oldPending", "pending", ago(60)),
+		oldPending: entry("oldPending", "pending", ago(8)),
+		freshPending: entry("freshPending", "pending", ago(6)),
 	};
 	fs.writeFileSync(file, JSON.stringify({ version: 1, revision: 5, entries }));
 	const ctx = { dataDirectory, signal: new AbortController().signal, registerInstructions: () => {}, registerTools: () => {}, handle: () => {}, events: { emit: () => {} } } as unknown as PluginBackendContext;
 	activate(ctx);
 	const stored = JSON.parse(fs.readFileSync(file, "utf8"));
-	assert.deepEqual(Object.keys(stored.entries).sort(), ["freshDeleted", "freshDismissed", "oldPending", "oldSaved"]);
+	assert.deepEqual(Object.keys(stored.entries).sort(), ["freshDeleted", "freshDismissed", "freshPending", "oldSaved"]);
 	assert.equal(stored.revision, 6);
 
 	activate(ctx);
