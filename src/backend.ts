@@ -1,7 +1,7 @@
 import type { PluginBackendContext } from "learnharness-plugin-api";
 import { CHANGED_TOPIC, mergeFields, pickFields, type Entry } from "./contract.ts";
 import { PRACTICE_INSTRUCTIONS } from "./instructions.ts";
-import { openStore, savedSubjects, type Store } from "./store.ts";
+import { openStore, pruneEntries, savedSubjects, type Store } from "./store.ts";
 import { createProposeTool } from "./tool.ts";
 
 function objectInput(input: unknown): Record<string, unknown> {
@@ -19,6 +19,9 @@ function entryOf(store: Store, id: unknown, status?: Entry["status"]): Entry {
 
 export function activate(ctx: PluginBackendContext): void {
 	const store = openStore(ctx.dataDirectory);
+	// Prune expired dismissed/deleted entries; write only when something expired.
+	const now = Date.now();
+	if (pruneEntries(structuredClone(store.get()), now) > 0) store.change(state => pruneEntries(state, now));
 	const notify = () => { if (!ctx.signal.aborted) ctx.events.emit(CHANGED_TOPIC); };
 
 	ctx.registerInstructions({ agents: ["practice"], text: PRACTICE_INSTRUCTIONS });
@@ -80,8 +83,26 @@ export function activate(ctx: PluginBackendContext): void {
 
 	register("delete-entry", input => {
 		const entry = entryOf(store, input.id, "saved");
-		store.change(state => { delete state.entries[entry.id]; });
+		const deleted = store.change(state => {
+			const next: Entry = { ...state.entries[entry.id]!, status: "deleted", updatedAt: new Date().toISOString() };
+			state.entries[entry.id] = next;
+			return next;
+		});
 		notify();
-		return { deleted: entry.id };
+		return { entry: deleted };
+	});
+
+	/** Undo: a dismissed proposal returns to pending, a deleted entry returns to saved. */
+	register("restore-entry", input => {
+		const entry = entryOf(store, input.id);
+		const status = entry.status === "dismissed" ? "pending" : entry.status === "deleted" ? "saved" : undefined;
+		if (!status) throw new Error(`That entry is ${entry.status} and cannot be restored.`);
+		const restored = store.change(state => {
+			const next: Entry = { ...state.entries[entry.id]!, status, updatedAt: new Date().toISOString() };
+			state.entries[entry.id] = next;
+			return next;
+		});
+		notify();
+		return { entry: restored };
 	});
 }

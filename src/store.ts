@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { Entry } from "./contract.ts";
+import { UNDO_RETENTION_MS, type Entry } from "./contract.ts";
 
 export interface StoreState {
 	version: 1;
@@ -67,4 +67,18 @@ export function savedSubjects(state: StoreState): string[] {
 		counts.set(entry.subject, (counts.get(entry.subject) ?? 0) + 1);
 	}
 	return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name]) => name);
+}
+
+/** Remove dismissed and deleted entries last changed more than the retention window ago.
+ * Returns the number removed. */
+export function pruneEntries(state: StoreState, now: number): number {
+	let removed = 0;
+	for (const [id, entry] of Object.entries(state.entries)) {
+		if (entry.status !== "dismissed" && entry.status !== "deleted") continue;
+		const changed = Date.parse(entry.updatedAt);
+		if (Number.isNaN(changed) || now - changed <= UNDO_RETENTION_MS) continue;
+		delete state.entries[id];
+		removed++;
+	}
+	return removed;
 }

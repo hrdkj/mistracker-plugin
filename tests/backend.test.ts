@@ -98,8 +98,49 @@ test("dismiss, update and delete", async () => {
 	assert.equal(updated.entry.howToAvoid, "New rule.");
 	await assert.rejects(async () => call("update-entry", { id: a, edits: {} }), /already dismissed/);
 	await call("delete-entry", { id: b });
-	assert.equal((await call("get-proposal", { id: b })).entry, null);
+	assert.equal((await call("get-proposal", { id: b })).entry.status, "deleted", "delete is a soft delete");
 	assert.equal((await call("list-entries")).entries.length, 0);
+	assert.deepEqual((await call("list-entries")).subjects, [], "deleted entries do not count as subjects");
+});
+
+test("undo restores dismissed proposals to pending and deleted entries to saved", async () => {
+	const { call, tool } = setup();
+	const a = (await tool().execute("a", fields)).details.proposalId;
+	const b = (await tool().execute("b", fields)).details.proposalId;
+	await call("dismiss-proposal", { id: a });
+	assert.equal((await call("restore-entry", { id: a })).entry.status, "pending");
+	await call("save-proposal", { id: b });
+	await call("delete-entry", { id: b });
+	assert.equal((await call("restore-entry", { id: b })).entry.status, "saved");
+	assert.equal((await call("list-entries")).entries.length, 1);
+	await assert.rejects(async () => call("restore-entry", { id: a }), /pending and cannot be restored/);
+	await assert.rejects(async () => call("restore-entry", { id: b }), /saved and cannot be restored/);
+	await assert.rejects(async () => call("restore-entry", { id: "nope" }), /no longer exists/);
+});
+
+test("startup prunes dismissed and deleted entries older than 7 days", () => {
+	const dataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "mistracker-test-"));
+	const file = path.join(dataDirectory, STORE_FILE);
+	const day = 24 * 60 * 60 * 1000;
+	const ago = (days: number) => new Date(Date.now() - days * day).toISOString();
+	const entry = (id: string, status: string, updatedAt: string) => ({ ...fields, id, status, chatId: "chat1", sessionTitle: "", problemStatement: "", toolCallId: id, createdAt: ago(30), updatedAt });
+	const entries = {
+		oldDismissed: entry("oldDismissed", "dismissed", ago(8)),
+		oldDeleted: entry("oldDeleted", "deleted", ago(8)),
+		freshDismissed: entry("freshDismissed", "dismissed", ago(6)),
+		freshDeleted: entry("freshDeleted", "deleted", ago(6)),
+		oldSaved: entry("oldSaved", "saved", ago(60)),
+		oldPending: entry("oldPending", "pending", ago(60)),
+	};
+	fs.writeFileSync(file, JSON.stringify({ version: 1, revision: 5, entries }));
+	const ctx = { dataDirectory, signal: new AbortController().signal, registerInstructions: () => {}, registerTools: () => {}, handle: () => {}, events: { emit: () => {} } } as unknown as PluginBackendContext;
+	activate(ctx);
+	const stored = JSON.parse(fs.readFileSync(file, "utf8"));
+	assert.deepEqual(Object.keys(stored.entries).sort(), ["freshDeleted", "freshDismissed", "oldPending", "oldSaved"]);
+	assert.equal(stored.revision, 6);
+
+	activate(ctx);
+	assert.equal(JSON.parse(fs.readFileSync(file, "utf8")).revision, 6, "nothing expired, so nothing is written");
 });
 
 test("rejects invalid fields", async () => {

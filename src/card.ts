@@ -50,35 +50,10 @@ export function mountCard(ctx: PluginFrontendContext, container: HTMLElement, to
 			return;
 		}
 		if (!entry) {
-			root.append(header("Mistracker"), el(doc, "p", "mt-muted", "This entry was deleted."));
-			return;
-		}
-		if (entry.status === "saved") {
 			root.classList.add("mt-card-compact");
-			const line = el(doc, "div", "mt-status-line");
-			const concept = el(doc, "span", "mt-muted mt-inline-md");
-			line.append(el(doc, "span", "mt-status mt-status-saved", "Saved to Mistracker"), el(doc, "span", "mt-muted", ` · ${entry.subject} · `), concept);
-			ctx.ui.mountMarkdown(concept, { text: entry.concept }, { signal });
-			root.append(line);
-			button(ctx, line, signal, { label: "Open library", variant: "link", onClick: () => ctx.app.openView("library") });
+			root.append(el(doc, "p", "mt-muted", "This mistake proposal is no longer available."));
 			return;
 		}
-		if (entry.status === "dismissed") {
-			root.classList.add("mt-card-compact");
-			const line = el(doc, "div", "mt-status-line");
-			const concept = el(doc, "span", "mt-muted mt-inline-md");
-			line.append(el(doc, "span", "mt-status", "Mistake proposal dismissed"), el(doc, "span", "mt-muted", " · "), concept);
-			ctx.ui.mountMarkdown(concept, { text: entry.concept }, { signal });
-			root.append(line);
-			return;
-		}
-		root.classList.remove("mt-card-compact");
-		root.append(header("Add this to your mistake tracker?"));
-		const form = editing ? createEntryForm(doc, pickFields(entry), current.subjects) : undefined;
-		root.append(form ? form.element : renderFields(doc, entry, (box, text) => { ctx.ui.mountMarkdown(box, { text }, { signal }); }));
-		if (message) root.append(el(doc, "p", "mt-error", message));
-		const actions = el(doc, "div", "mt-actions");
-		root.append(actions);
 		const run = async (operation: string, input: unknown) => {
 			if (busy) return;
 			busy = true;
@@ -95,6 +70,44 @@ export function mountCard(ctx: PluginFrontendContext, container: HTMLElement, to
 				if (!tool.signal.aborted) render();
 			}
 		};
+		/** Compact one-line status with the concept, plus any error. */
+		const statusLine = (status: string) => {
+			root.classList.add("mt-card-compact");
+			const line = el(doc, "div", "mt-status-line");
+			const concept = el(doc, "span", "mt-muted mt-inline-md");
+			line.append(el(doc, "span", "mt-status", status), el(doc, "span", "mt-muted", " · "), concept);
+			ctx.ui.mountMarkdown(concept, { text: entry.concept }, { signal });
+			root.append(line);
+			if (message) root.append(el(doc, "p", "mt-error", message));
+			return line;
+		};
+		const undo = (line: HTMLElement) =>
+			button(ctx, line, signal, { label: "Undo", variant: "link", onClick: () => run("restore-entry", { id: entry.id }) });
+		if (entry.status === "saved") {
+			root.classList.add("mt-card-compact");
+			const line = el(doc, "div", "mt-status-line");
+			const concept = el(doc, "span", "mt-muted mt-inline-md");
+			line.append(el(doc, "span", "mt-status mt-status-saved", "Saved to Mistracker"), el(doc, "span", "mt-muted", ` · ${entry.subject} · `), concept);
+			ctx.ui.mountMarkdown(concept, { text: entry.concept }, { signal });
+			root.append(line);
+			button(ctx, line, signal, { label: "Open library", variant: "link", onClick: () => ctx.app.openView("library") });
+			return;
+		}
+		if (entry.status === "dismissed") {
+			undo(statusLine("Mistake proposal dismissed"));
+			return;
+		}
+		if (entry.status === "deleted") {
+			undo(statusLine("Deleted from Mistracker"));
+			return;
+		}
+		root.classList.remove("mt-card-compact");
+		root.append(header("Add this to your mistake tracker?"));
+		const form = editing ? createEntryForm(doc, pickFields(entry), current.subjects) : undefined;
+		root.append(form ? form.element : renderFields(doc, entry, (box, text) => { ctx.ui.mountMarkdown(box, { text }, { signal }); }));
+		if (message) root.append(el(doc, "p", "mt-error", message));
+		const actions = el(doc, "div", "mt-actions");
+		root.append(actions);
 		if (form) {
 			button(ctx, actions, signal, { label: "Save", onClick: () => run("save-proposal", { id: entry.id, edits: form.read() }) });
 			button(ctx, actions, signal, { label: "Cancel", variant: "ghost", onClick: () => { editing = false; message = ""; render(); } });
