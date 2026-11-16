@@ -1,4 +1,4 @@
-/** Library view: saved entries grouped by subject. */
+/** Library view: saved entries grouped by subject, with in-place Undo for deletions. */
 import type { PluginFrontendContext } from "learnharness-plugin-api";
 import { pickFields, type Entry } from "./contract.ts";
 import { createEntryForm, el } from "./form.ts";
@@ -21,6 +21,8 @@ export function mountLibrary(ctx: PluginFrontendContext, container: HTMLElement,
 	const closedSubjects = new Set<string>();
 	let data: LibraryData | undefined;
 	let message = "";
+	/** Error from the last delete or undo; kept across the reload that follows it. */
+	let actionError = "";
 	let scope = childScope(viewSignal);
 
 	const openEditor = (entry: Entry) => {
@@ -51,33 +53,25 @@ export function mountLibrary(ctx: PluginFrontendContext, container: HTMLElement,
 		}, { signal: viewSignal });
 	};
 
-	const confirmDelete = (entry: Entry) => {
-		const handle = ctx.ui.openDialog({
-			title: "Delete mistake",
-			content: (body, signal) => {
-				const box = el(doc, "div", "mt-root mt-dialog");
-				const concept = el(doc, "div", "mt-concept mt-text");
-				box.append(el(doc, "h2", "mt-dialog-title", "Delete this mistake?"), concept, el(doc, "p", "mt-muted", "It will be removed permanently."));
-				ctx.ui.mountMarkdown(concept, { text: entry.concept }, { signal });
-				const error = el(doc, "p", "mt-error");
-				const actions = el(doc, "div", "mt-actions");
-				box.append(error, actions);
-				body.append(box);
-				button(ctx, actions, signal, {
-					label: "Delete",
-					variant: "destructive",
-					onClick: async () => {
-						try {
-							await ctx.call("delete-entry", { id: entry.id });
-							handle.dispose();
-							void load();
-						} catch (failure) { error.textContent = errorText(failure); }
-					},
-				});
-				button(ctx, actions, signal, { label: "Cancel", variant: "ghost", onClick: () => handle.dispose() });
-				return () => box.remove();
-			},
-		}, { signal: viewSignal });
+	/** Entries deleted while this view is open; shown in place as an Undo row until the view closes. */
+	const recentlyDeleted = new Map<string, Entry>();
+
+	const deleteEntry = async (entry: Entry) => {
+		try {
+			const result = await ctx.call<{ entry: Entry }>("delete-entry", { id: entry.id });
+			recentlyDeleted.set(entry.id, result.entry);
+			actionError = "";
+		} catch (failure) { actionError = errorText(failure); }
+		void load();
+	};
+
+	const restoreEntry = async (entry: Entry) => {
+		try {
+			await ctx.call("restore-entry", { id: entry.id });
+			recentlyDeleted.delete(entry.id);
+			actionError = "";
+		} catch (failure) { actionError = errorText(failure); }
+		void load();
 	};
 
 	/** Long problems are clipped to ~6 lines with a fade and a Show more / Show less toggle. */
@@ -121,7 +115,22 @@ export function mountLibrary(ctx: PluginFrontendContext, container: HTMLElement,
 		return td;
 	};
 
+	const renderDeletedRow = (entry: Entry, signal: AbortSignal) => {
+		const row = el(doc, "tr", "mt-row mt-row-deleted");
+		const td = cell("", "mt-col-deleted");
+		td.colSpan = COLUMNS.length;
+		const line = el(doc, "div", "mt-status-line");
+		const concept = el(doc, "span", "mt-muted mt-inline-md");
+		line.append(el(doc, "span", "mt-status", "Deleted"), el(doc, "span", "mt-muted", " · "), concept);
+		ctx.ui.mountMarkdown(concept, { text: entry.concept }, { signal });
+		button(ctx, line, signal, { label: "Undo", variant: "link", onClick: () => restoreEntry(entry) });
+		td.append(line);
+		row.append(td);
+		return row;
+	};
+
 	const renderRow = (entry: Entry, signal: AbortSignal) => {
+		if (entry.status === "deleted") return renderDeletedRow(entry, signal);
 		const row = el(doc, "tr", "mt-row");
 		const concept = cell("Concept", "mt-col-concept");
 		const conceptText = el(doc, "div", "mt-concept");
@@ -144,7 +153,7 @@ export function mountLibrary(ctx: PluginFrontendContext, container: HTMLElement,
 		actions.append(icons);
 		if (entry.chatId) button(ctx, icons, signal, { label: "Open session", icon: ICON_OPEN, iconOnly: true, size: "icon-sm", variant: "ghost", title: entry.sessionTitle ? `Open “${entry.sessionTitle}”` : "Open session", onClick: () => ctx.app.openSession(entry.chatId) });
 		button(ctx, icons, signal, { label: "Edit", icon: ICON_EDIT, iconOnly: true, size: "icon-sm", variant: "ghost", title: "Edit", onClick: () => openEditor(entry) });
-		button(ctx, icons, signal, { label: "Delete", icon: ICON_DELETE, iconOnly: true, size: "icon-sm", variant: "ghost", title: "Delete", onClick: () => confirmDelete(entry) });
+		button(ctx, icons, signal, { label: "Delete", icon: ICON_DELETE, iconOnly: true, size: "icon-sm", variant: "ghost", title: "Delete", onClick: () => deleteEntry(entry) });
 		row.append(concept, problem, why, avoid, actions);
 		return row;
 	};
@@ -175,18 +184,19 @@ export function mountLibrary(ctx: PluginFrontendContext, container: HTMLElement,
 		const heading = el(doc, "div", "mt-library-header");
 		heading.append(el(doc, "h1", "mt-library-title", "Mistakes"));
 		root.append(heading);
-		if (message) root.append(el(doc, "p", "mt-error", message));
+		for (const text of [message, actionError]) if (text) root.append(el(doc, "p", "mt-error", text));
 		if (!data) {
 			root.append(el(doc, "p", "mt-muted", "Loading…"));
 			return;
 		}
-		if (!data.entries.length) {
+		const shown = [...data.entries, ...recentlyDeleted.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+		if (!shown.length) {
 			root.append(el(doc, "p", "mt-muted mt-empty", "No mistakes saved yet. When the practice agent spots a meaningful gap in your thinking, it will propose an entry at the end of the problem for you to save."));
 			return;
 		}
 		heading.append(el(doc, "span", "mt-muted", `${data.entries.length} saved`));
 		const groups = new Map<string, Entry[]>();
-		for (const entry of data.entries) {
+		for (const entry of shown) {
 			const list = groups.get(entry.subject) ?? [];
 			list.push(entry);
 			groups.set(entry.subject, list);
@@ -198,7 +208,8 @@ export function mountLibrary(ctx: PluginFrontendContext, container: HTMLElement,
 			group.open = !closedSubjects.has(subject);
 			group.addEventListener("toggle", () => { if (group.open) closedSubjects.delete(subject); else closedSubjects.add(subject); });
 			const summary = el(doc, "summary", "mt-group-summary");
-			summary.append(el(doc, "span", "mt-group-name", subject), el(doc, "span", "mt-group-count", String(entries.length)));
+			const savedCount = entries.filter(entry => entry.status === "saved").length;
+			summary.append(el(doc, "span", "mt-group-name", subject), el(doc, "span", "mt-group-count", String(savedCount)));
 			group.append(summary);
 			group.append(renderTable(entries, signal));
 			root.append(group);
@@ -210,6 +221,8 @@ export function mountLibrary(ctx: PluginFrontendContext, container: HTMLElement,
 			const next = await ctx.call<LibraryData>("list-entries", {});
 			if (viewSignal.aborted) return;
 			data = next;
+			// Drop Undo rows for entries restored elsewhere (e.g. from their session card).
+			for (const entry of next.entries) recentlyDeleted.delete(entry.id);
 			message = "";
 		} catch (error) {
 			if (viewSignal.aborted) return;

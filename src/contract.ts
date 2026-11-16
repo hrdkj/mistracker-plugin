@@ -9,7 +9,10 @@ export const MISS_CLASSES = ["cue", "discrimination", "execution", "careless", "
 
 export type MistakeType = (typeof MISTAKE_TYPES)[number];
 export type MissClass = (typeof MISS_CLASSES)[number];
-export type EntryStatus = "pending" | "saved" | "dismissed";
+export type EntryStatus = "pending" | "saved" | "dismissed" | "deleted";
+
+/** Unsaved entries (pending, dismissed, deleted) are kept this long after their last change, then pruned at startup. */
+export const UNDO_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Fields the agent drafts and the learner may edit. */
 export interface EntryFields {
