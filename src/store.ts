@@ -2,10 +2,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { UNDO_RETENTION_MS, type Entry } from "./contract.ts";
+import { UNDO_RETENTION_MS, type Cause, type Entry } from "./contract.ts";
 
 export interface StoreState {
-	version: 1;
+	version: 2;
 	revision: number;
 	entries: Record<string, Entry>;
 }
@@ -16,6 +16,37 @@ export interface Store {
 }
 
 export const STORE_FILE = "mistracker.json";
+/** Copy of the version 1 file, written once before it is migrated. */
+export const V1_BACKUP_FILE = "mistracker.v1-backup.json";
+
+const INVALID = "Unsupported or invalid Mistracker data. No data was changed.";
+
+/** Version 1 stored a miss class and a mistake type; version 2 stores one cause. */
+const V1_CAUSES: Record<string, Cause> = { structural: "Misconception", discrimination: "Mix-up", execution: "Wrong steps", careless: "Wrong steps" };
+const V1_CUE_CAUSES: Record<string, Cause> = { "New info/detail": "Never learned", "Memory/Formula": "Forgot" };
+
+function causeFromV1(entry: { missClass?: unknown; mistakeType?: unknown }): Cause {
+	if (entry.missClass === "cue") return V1_CUE_CAUSES[entry.mistakeType as string] ?? "Didn't apply";
+	const cause = V1_CAUSES[entry.missClass as string];
+	if (!cause) throw new Error(INVALID);
+	return cause;
+}
+
+function isStateShape(state: { revision?: unknown; entries?: unknown } | null): boolean {
+	return !!state && Number.isSafeInteger(state.revision) && !!state.entries && typeof state.entries === "object" && !Array.isArray(state.entries);
+}
+
+function migrateV1(file: string, v1: { revision: number; entries: Record<string, Record<string, unknown>> }): StoreState {
+	const entries: Record<string, Entry> = {};
+	for (const [id, { missClass, mistakeType, ...rest }] of Object.entries(v1.entries)) {
+		entries[id] = { ...rest, cause: causeFromV1({ missClass, mistakeType }) } as Entry;
+	}
+	const backup = path.join(path.dirname(file), V1_BACKUP_FILE);
+	if (!fs.existsSync(backup)) fs.copyFileSync(file, backup, fs.constants.COPYFILE_EXCL);
+	const state: StoreState = { version: 2, revision: v1.revision + 1, entries };
+	atomicWrite(file, JSON.stringify(state));
+	return state;
+}
 
 function atomicWrite(file: string, content: string): void {
 	const temporary = `${file}.${randomUUID()}.tmp`;
@@ -41,11 +72,11 @@ export function openStore(directory: string): Store {
 		state = JSON.parse(fs.readFileSync(file, "utf8"));
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw new Error(`Could not read Mistracker data: ${(error as Error).message}`);
-		state = { version: 1, revision: 0, entries: {} };
+		state = { version: 2, revision: 0, entries: {} };
 	}
-	if (!state || state.version !== 1 || !Number.isSafeInteger(state.revision) || !state.entries || typeof state.entries !== "object" || Array.isArray(state.entries)) {
-		throw new Error("Unsupported or invalid Mistracker data. No data was changed.");
-	}
+	if (!isStateShape(state)) throw new Error(INVALID);
+	if ((state.version as number) === 1) state = migrateV1(file, state as never);
+	if (state.version !== 2) throw new Error(INVALID);
 	return {
 		get: () => state,
 		change(update) {

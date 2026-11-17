@@ -5,14 +5,13 @@ import os from "node:os";
 import path from "node:path";
 import type { PluginBackendContext } from "learnharness-plugin-api";
 import { activate } from "../src/backend.ts";
-import { STORE_FILE } from "../src/store.ts";
+import { STORE_FILE, V1_BACKUP_FILE } from "../src/store.ts";
 import { latestProblemStatement } from "../src/session.ts";
 
 const fields = {
 	subject: "Statistics",
 	concept: "Conditional probability direction",
-	mistakeType: "Conceptual",
-	missClass: "discrimination",
+	cause: "Mix-up",
 	whyHappened: "Treated P(A|B) as P(B|A).",
 	howToAvoid: "Write the conditioning event explicitly before computing.",
 };
@@ -31,8 +30,7 @@ const practiceSession = {
 	],
 };
 
-function setup() {
-	const dataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "mistracker-test-"));
+function setup(dataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "mistracker-test-"))) {
 	const handlers = new Map<string, (input: unknown) => unknown>();
 	const emitted: string[] = [];
 	const registrations: { instructions: unknown[]; tools: { agents: string[]; create: (c: unknown) => any[] }[] } = { instructions: [], tools: [] };
@@ -133,7 +131,7 @@ test("startup prunes pending, dismissed and deleted entries older than 7 days", 
 		oldPending: entry("oldPending", "pending", ago(8)),
 		freshPending: entry("freshPending", "pending", ago(6)),
 	};
-	fs.writeFileSync(file, JSON.stringify({ version: 1, revision: 5, entries }));
+	fs.writeFileSync(file, JSON.stringify({ version: 2, revision: 5, entries }));
 	const ctx = { dataDirectory, signal: new AbortController().signal, registerInstructions: () => {}, registerTools: () => {}, handle: () => {}, events: { emit: () => {} } } as unknown as PluginBackendContext;
 	activate(ctx);
 	const stored = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -146,8 +144,7 @@ test("startup prunes pending, dismissed and deleted entries older than 7 days", 
 
 test("rejects invalid fields", async () => {
 	const { call, tool } = setup();
-	await assert.rejects(tool().execute("x", { ...fields, mistakeType: "Silly/Careless" }), /mistakeType/);
-	await assert.rejects(tool().execute("x", { ...fields, missClass: "nope" }), /missClass/);
+	await assert.rejects(tool().execute("x", { ...fields, cause: "careless" }), /cause must be one of/);
 	await assert.rejects(tool().execute("x", { ...fields, concept: "  " }), /concept/);
 	const id = (await tool().execute("y", fields)).details.proposalId;
 	await assert.rejects(async () => call("save-proposal", { id, edits: { bogus: 1 } }), /Unknown field/);
@@ -165,10 +162,60 @@ test("unknown session still records the proposal", async () => {
 test("store refuses unsupported data without changing it", () => {
 	const dataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "mistracker-test-"));
 	const file = path.join(dataDirectory, STORE_FILE);
-	fs.writeFileSync(file, JSON.stringify({ version: 2, revision: 0, entries: {} }));
+	fs.writeFileSync(file, JSON.stringify({ version: 3, revision: 0, entries: {} }));
 	const ctx = { dataDirectory, signal: new AbortController().signal } as unknown as PluginBackendContext;
 	assert.throws(() => activate(ctx), /Unsupported or invalid/);
-	assert.equal(JSON.parse(fs.readFileSync(file, "utf8")).version, 2);
+	assert.equal(JSON.parse(fs.readFileSync(file, "utf8")).version, 3);
+});
+
+function v1Directory(pairs: Record<string, [string, string]>) {
+	const dataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "mistracker-test-"));
+	const now = new Date().toISOString();
+	const entries = Object.fromEntries(Object.entries(pairs).map(([id, [missClass, mistakeType]]) => {
+		const { cause: _, ...rest } = fields;
+		return [id, { ...rest, missClass, mistakeType, id, status: "saved", chatId: "chat1", sessionTitle: "", problemStatement: "", toolCallId: id, createdAt: now, updatedAt: now }];
+	}));
+	const original = JSON.stringify({ version: 1, revision: 4, entries });
+	fs.writeFileSync(path.join(dataDirectory, STORE_FILE), original);
+	return { dataDirectory, original };
+}
+
+test("version 1 data migrates to one cause per entry and keeps a backup", async () => {
+	const { dataDirectory, original } = v1Directory({
+		a: ["structural", "Conceptual"],
+		b: ["discrimination", "Conceptual"],
+		c: ["cue", "New info/detail"],
+		d: ["cue", "Memory/Formula"],
+		e: ["cue", "Conceptual"],
+		f: ["cue", "Calculation"],
+		g: ["execution", "Calculation"],
+		h: ["execution", "Conceptual"],
+		i: ["careless", "Calculation"],
+	});
+	const { call } = setup(dataDirectory);
+	const { entries } = await call("list-entries");
+	const causes = Object.fromEntries(entries.map((entry: { id: string; cause: string }) => [entry.id, entry.cause]));
+	assert.deepEqual(causes, { a: "Misconception", b: "Mix-up", c: "Never learned", d: "Forgot", e: "Didn't apply", f: "Didn't apply", g: "Wrong steps", h: "Wrong steps", i: "Wrong steps" });
+	const stored = JSON.parse(fs.readFileSync(path.join(dataDirectory, STORE_FILE), "utf8"));
+	assert.equal(stored.version, 2);
+	assert.equal(stored.revision, 5);
+	assert.ok(!("missClass" in stored.entries.a) && !("mistakeType" in stored.entries.a), "old fields are dropped");
+	assert.equal(fs.readFileSync(path.join(dataDirectory, V1_BACKUP_FILE), "utf8"), original, "backup is the untouched version 1 file");
+});
+
+test("version 1 data with an unknown miss class is refused without changes", () => {
+	const { dataDirectory, original } = v1Directory({ a: ["structural", "Conceptual"], b: ["nope", "Conceptual"] });
+	const ctx = { dataDirectory, signal: new AbortController().signal } as unknown as PluginBackendContext;
+	assert.throws(() => activate(ctx), /Unsupported or invalid/);
+	assert.equal(fs.readFileSync(path.join(dataDirectory, STORE_FILE), "utf8"), original);
+	assert.ok(!fs.existsSync(path.join(dataDirectory, V1_BACKUP_FILE)));
+});
+
+test("edit form switches the stored cause", async () => {
+	const { call, tool } = setup();
+	const id = (await tool().execute("c", fields)).details.proposalId;
+	const saved = await call("save-proposal", { id, edits: { cause: "Forgot" } });
+	assert.equal(saved.entry.cause, "Forgot");
 });
 
 test("plugin problem poses are recognized through their snapshot", () => {
@@ -187,4 +234,5 @@ test("instructions ask for short human notes with LaTeX and code formatting", ()
 	assert.match(text, /Do not write "the learner"/);
 	assert.match(text, /LaTeX: `\$\.\.\.\$` inline/);
 	assert.match(text, /fenced code blocks with a language tag/);
+	assert.match(text, /`careless`, do not propose/);
 });
