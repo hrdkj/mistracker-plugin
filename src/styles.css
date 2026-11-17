@@ -35,6 +35,8 @@
 .mt-library { padding: 16px; max-width: 1400px; margin: 0 auto; }
 .mt-root .mt-library-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
 .mt-root .mt-library-title { font-size: 20px; font-weight: 600; margin: 0; }
+.mt-root .mt-search { width: 260px; max-width: 100%; margin: 0 0 0 auto; }
+.mt-root .mt-search[hidden], .mt-root .mt-table tr[hidden] { display: none; }
 .mt-root .mt-empty { max-width: 560px; }
 .mt-root .mt-group { border: 1px solid var(--border, #8885); border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
 .mt-root .mt-group-summary { display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; font-weight: 600; background: var(--muted, transparent); }
@@ -80,6 +82,8 @@
 
 @media (max-width: 560px) {
   .mt-root .mt-field-pair { grid-template-columns: 1fr; }
+  .mt-root .mt-library-header { flex-wrap: wrap; }
+  .mt-root .mt-search { width: 100%; margin-left: 0; }
 }
 /* Narrow screens: each row becomes a stacked card with cell labels. */
 @media (max-width: 760px) {
