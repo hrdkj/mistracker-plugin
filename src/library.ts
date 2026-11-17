@@ -2,6 +2,7 @@
 import type { PluginFrontendContext } from "learnharness-plugin-api";
 import { pickFields, type Entry } from "./contract.ts";
 import { createEntryForm, el } from "./form.ts";
+import { entryMatches, searchTerms } from "./search.ts";
 import { button, childScope, errorText, subscribeRefresh } from "./ui-common.ts";
 
 const svg = (paths: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
@@ -14,11 +15,27 @@ const PROBLEM_CLAMP_PX = 150;
 
 interface LibraryData { entries: Entry[]; subjects: string[] }
 
+/** What render() put on screen, so the search filter can show and hide it without re-rendering. */
+interface RenderedLibrary {
+	groups: { subject: string; element: HTMLDetailsElement; count: HTMLElement; rows: { entry: Entry; element: HTMLTableRowElement }[] }[];
+	noMatch: HTMLElement;
+}
+
 export function mountLibrary(ctx: PluginFrontendContext, container: HTMLElement, viewSignal: AbortSignal): () => void {
 	const doc = container.ownerDocument;
 	const root = el(doc, "div", "mt-root mt-library");
+	const heading = el(doc, "div", "mt-library-header");
+	const count = el(doc, "span", "mt-muted");
+	const search = el(doc, "input", "mt-input mt-search");
+	search.type = "search";
+	search.placeholder = "Search mistakes";
+	search.setAttribute("aria-label", "Search mistakes");
+	heading.append(el(doc, "h1", "mt-library-title", "Mistakes"), count, search);
+	const content = el(doc, "div");
+	root.append(heading, content);
 	container.append(root);
 	const closedSubjects = new Set<string>();
+	let rendered: RenderedLibrary | undefined;
 	let data: LibraryData | undefined;
 	let message = "";
 	/** Error from the last delete or undo; kept across the reload that follows it. */
@@ -158,7 +175,7 @@ export function mountLibrary(ctx: PluginFrontendContext, container: HTMLElement,
 		return row;
 	};
 
-	const renderTable = (entries: Entry[], signal: AbortSignal) => {
+	const renderTable = (rows: HTMLTableRowElement[]) => {
 		const wrap = el(doc, "div", "mt-table-wrap");
 		const table = el(doc, "table", "mt-table");
 		const head = el(doc, "thead");
@@ -170,50 +187,93 @@ export function mountLibrary(ctx: PluginFrontendContext, container: HTMLElement,
 		}
 		head.append(headRow);
 		const body = el(doc, "tbody");
-		for (const entry of entries) body.append(renderRow(entry, signal));
+		body.append(...rows);
 		table.append(head, body);
 		wrap.append(table);
 		return wrap;
 	};
 
-	const render = () => {
-		scope.abort();
-		scope = childScope(viewSignal);
-		const signal = scope.signal;
-		root.replaceChildren();
-		const heading = el(doc, "div", "mt-library-header");
-		heading.append(el(doc, "h1", "mt-library-title", "Mistakes"));
-		root.append(heading);
-		for (const text of [message, actionError]) if (text) root.append(el(doc, "p", "mt-error", text));
+	const renderContent = (signal: AbortSignal): RenderedLibrary | undefined => {
+		for (const text of [message, actionError]) if (text) content.append(el(doc, "p", "mt-error", text));
 		if (!data) {
-			root.append(el(doc, "p", "mt-muted", "Loading…"));
-			return;
+			content.append(el(doc, "p", "mt-muted", "Loading…"));
+			return undefined;
 		}
 		const shown = [...data.entries, ...recentlyDeleted.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 		if (!shown.length) {
-			root.append(el(doc, "p", "mt-muted mt-empty", "No mistakes saved yet. When the practice agent spots a meaningful gap in your thinking, it will propose an entry at the end of the problem for you to save."));
-			return;
+			content.append(el(doc, "p", "mt-muted mt-empty", "No mistakes saved yet. When the practice agent spots a meaningful gap in your thinking, it will propose an entry at the end of the problem for you to save."));
+			return undefined;
 		}
-		heading.append(el(doc, "span", "mt-muted", `${data.entries.length} saved`));
-		const groups = new Map<string, Entry[]>();
+		const bySubject = new Map<string, Entry[]>();
 		for (const entry of shown) {
-			const list = groups.get(entry.subject) ?? [];
+			const list = bySubject.get(entry.subject) ?? [];
 			list.push(entry);
-			groups.set(entry.subject, list);
+			bySubject.set(entry.subject, list);
 		}
-		const subjects = [...groups.keys()].sort((a, b) => a.localeCompare(b));
-		for (const subject of subjects) {
-			const entries = groups.get(subject)!;
+		const groups: RenderedLibrary["groups"] = [];
+		for (const subject of [...bySubject.keys()].sort((a, b) => a.localeCompare(b))) {
 			const group = el(doc, "details", "mt-group");
-			group.open = !closedSubjects.has(subject);
-			group.addEventListener("toggle", () => { if (group.open) closedSubjects.delete(subject); else closedSubjects.add(subject); });
+			group.addEventListener("toggle", () => {
+				// While searching, groups are forced open; that must not overwrite the user's own choice.
+				if (searchTerms(search.value).length) return;
+				if (group.open) closedSubjects.delete(subject);
+				else closedSubjects.add(subject);
+			});
 			const summary = el(doc, "summary", "mt-group-summary");
-			const savedCount = entries.filter(entry => entry.status === "saved").length;
-			summary.append(el(doc, "span", "mt-group-name", subject), el(doc, "span", "mt-group-count", String(savedCount)));
-			group.append(summary);
-			group.append(renderTable(entries, signal));
-			root.append(group);
+			const groupCount = el(doc, "span", "mt-group-count");
+			summary.append(el(doc, "span", "mt-group-name", subject), groupCount);
+			const rows = bySubject.get(subject)!.map(entry => ({ entry, element: renderRow(entry, signal) }));
+			group.append(summary, renderTable(rows.map(row => row.element)));
+			content.append(group);
+			groups.push({ subject, element: group, count: groupCount, rows });
 		}
+		const noMatch = el(doc, "p", "mt-muted");
+		content.append(noMatch);
+		return { groups, noMatch };
+	};
+
+	/** The only place that shows, hides, opens and counts rendered entries. */
+	const applyFilter = () => {
+		count.hidden = !rendered;
+		search.hidden = !rendered;
+		if (!rendered || !data) return;
+		const terms = searchTerms(search.value);
+		const searching = terms.length > 0;
+		let matchingSaved = 0;
+		let anyMatch = false;
+		for (const group of rendered.groups) {
+			let groupSaved = 0;
+			let groupMatches = false;
+			for (const row of group.rows) {
+				const match = entryMatches(row.entry, terms);
+				row.element.hidden = !match;
+				groupMatches ||= match;
+				if (match && row.entry.status === "saved") groupSaved++;
+			}
+			group.element.hidden = !groupMatches;
+			group.element.open = searching || !closedSubjects.has(group.subject);
+			group.count.textContent = String(groupSaved);
+			matchingSaved += groupSaved;
+			anyMatch ||= groupMatches;
+		}
+		count.textContent = searching ? `${matchingSaved} of ${data.entries.length}` : `${data.entries.length} saved`;
+		rendered.noMatch.hidden = anyMatch;
+		rendered.noMatch.textContent = `No mistakes match “${search.value.trim()}”.`;
+	};
+
+	search.addEventListener("input", applyFilter, { signal: viewSignal });
+	search.addEventListener("keydown", event => {
+		if (event.key !== "Escape") return;
+		search.value = "";
+		applyFilter();
+	}, { signal: viewSignal });
+
+	const render = () => {
+		scope.abort();
+		scope = childScope(viewSignal);
+		content.replaceChildren();
+		rendered = renderContent(scope.signal);
+		applyFilter();
 	};
 
 	const load = async () => {

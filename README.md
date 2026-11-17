@@ -6,7 +6,8 @@ When the LearnHarness **practice agent** concludes a problem where your answer e
 a real gap in your thinking, it drafts one mistake entry: what concept you missed, *why*
 it happened and *how to avoid it* next time. You **Save**, **Edit** or **Dismiss** it
 right in the session. Saved entries live in a **Mistracker** view, grouped by subject,
-in a table built for a quick review before an exam.
+in a table built for a quick review before an exam. A search box finds entries by every
+word you type, in any order, across all of their text.
 
 ![A proposed mistake entry in a practice session](docs/card.png)
 
