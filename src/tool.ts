@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { PluginBackendContext, PluginToolContext } from "learnharness-plugin-api";
-import { FIELD_LIMITS, MISS_CLASSES, MISTAKE_TYPES, TOOL_NAME, validateFields, type Entry } from "./contract.ts";
+import { CAUSES, CAUSE_MEANINGS, FIELD_LIMITS, TOOL_NAME, validateFields, type Entry } from "./contract.ts";
 import { latestProblemStatement } from "./session.ts";
 import { savedSubjects, type Store } from "./store.ts";
 
@@ -12,12 +12,11 @@ const parameters = {
 	properties: {
 		subject: { type: "string", minLength: 1, maxLength: FIELD_LIMITS.subject, description: "Broad course-level subject, e.g. Statistics, Biology, Machine Learning." },
 		concept: { type: "string", minLength: 1, maxLength: FIELD_LIMITS.concept, description: "Short name for the idea the learner got wrong, a few words. Markdown; math in LaTeX." },
-		mistakeType: { type: "string", enum: [...MISTAKE_TYPES] },
-		missClass: { type: "string", enum: [...MISS_CLASSES], description: "The same miss class you gave in conclude." },
+		cause: { type: "string", enum: [...CAUSES], description: `What went wrong: ${CAUSES.map(cause => `"${cause}": ${CAUSE_MEANINGS[cause]}`).join("; ")}.` },
 		whyHappened: { type: "string", minLength: 1, maxLength: FIELD_LIMITS.whyHappened, description: "One or two first-person sentences (\"I…\") naming the wrong assumption. Markdown; math in LaTeX." },
 		howToAvoid: { type: "string", minLength: 1, maxLength: FIELD_LIMITS.howToAvoid, description: "One quick rule or check for next time, starting with the action: one or two sentences or at most 3 short bullets. Markdown; math in LaTeX." },
 	},
-	required: ["subject", "concept", "mistakeType", "missClass", "whyHappened", "howToAvoid"],
+	required: ["subject", "concept", "cause", "whyHappened", "howToAvoid"],
 	additionalProperties: false,
 };
 

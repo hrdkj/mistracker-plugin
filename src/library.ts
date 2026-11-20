@@ -151,7 +151,7 @@ export function mountLibrary(ctx: PluginFrontendContext, container: HTMLElement,
 		const row = el(doc, "tr", "mt-row");
 		const concept = cell("Concept", "mt-col-concept");
 		const conceptText = el(doc, "div", "mt-concept");
-		concept.append(conceptText);
+		concept.append(conceptText, el(doc, "span", "mt-chip mt-cause", entry.cause));
 		ctx.ui.mountMarkdown(conceptText, { text: entry.concept }, { signal });
 		const problem = cell("Problem", "mt-col-problem");
 		if (entry.problemStatement) mountClampedProblem(problem, entry.problemStatement, signal);

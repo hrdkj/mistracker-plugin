@@ -31,9 +31,8 @@ tracker in its replies; the card is the only trace.
 Each entry has:
 
 - Subject and concept (the concept renders Markdown and LaTeX)
-- Mistake type: Conceptual, New info/detail, Calculation or Memory/Formula
-- Miss class, the same one the practice agent uses when it concludes: cue,
-  discrimination, execution, careless or structural
+- Cause: Misconception, Mix-up, Never learned, Forgot, Didn't apply or Wrong steps.
+  The practice agent picks it to match the miss class it gave when concluding
 - Why it happened and how to avoid it: short, first-person notes written for a quick
   scan before an exam (Markdown, LaTeX math and code blocks supported)
 - The problem statement and a link back to the session. Long problems are clipped to

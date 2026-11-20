@@ -18,7 +18,6 @@
 /* Form */
 .mt-root .mt-form { display: flex; flex-direction: column; gap: 10px; }
 .mt-root .mt-field { display: block; min-width: 0; }
-.mt-root .mt-field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .mt-root .mt-input { display: block; width: 100%; margin-top: 4px; border: 1px solid var(--border, #8886); border-radius: 6px; padding: 6px 9px; background: var(--background, transparent); color: inherit; font: inherit; }
 .mt-root .mt-input:focus-visible { outline: 2px solid var(--ring, #60a5fa); outline-offset: 1px; }
 .mt-root .mt-textarea { resize: vertical; min-height: 64px; }
@@ -54,6 +53,7 @@
 .mt-root .mt-col-avoid .mt-text { color: var(--foreground, inherit); }
 .mt-root .mt-col-why .mt-text { color: var(--muted-foreground, #8889); }
 .mt-root .mt-col-concept .mt-concept { font-size: 14px; }
+.mt-root .mt-col-concept .mt-cause { margin-top: 6px; max-width: 100%; white-space: normal; line-height: 16px; padding-top: 2px; padding-bottom: 2px; }
 .mt-root .mt-icon-actions { display: flex; justify-content: flex-end; gap: 2px; }
 .mt-root .mt-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .mt-root .mt-problem { font-size: 13px; }
@@ -81,9 +81,6 @@
 .mt-root .mt-col-why .mt-text, .mt-root .mt-col-problem .mt-problem { color: var(--muted-foreground, #8889); font-size: 13px; }
 .mt-root .mt-dialog-title { font-size: 16px; font-weight: 600; margin: 0 0 12px; }
 
-@media (max-width: 560px) {
-  .mt-root .mt-field-pair { grid-template-columns: 1fr; }
-}
 /* Narrow screens: each row becomes a stacked card with cell labels. */
 @media (max-width: 760px) {
   .mt-root .mt-table, .mt-root .mt-table tbody, .mt-root .mt-table tr, .mt-root .mt-table td { display: block; width: 100%; }

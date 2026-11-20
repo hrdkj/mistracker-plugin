@@ -1,5 +1,5 @@
 /** Plain-DOM entry form shared by the session card and the library edit dialog. */
-import { FIELD_LIMITS, MISS_CLASSES, MISTAKE_TYPES, type EntryFields } from "./contract.ts";
+import { CAUSES, FIELD_LIMITS, type EntryFields } from "./contract.ts";
 
 let listCounter = 0;
 
@@ -59,22 +59,13 @@ export function createEntryForm(doc: Document, fields: EntryFields, subjects: re
 	const subject = input(fields.subject, FIELD_LIMITS.subject);
 	subject.setAttribute("list", listId);
 	const concept = input(fields.concept, FIELD_LIMITS.concept);
-	const mistakeType = select(fields.mistakeType, MISTAKE_TYPES);
-	const missClass = select(fields.missClass, MISS_CLASSES);
+	const cause = select(fields.cause, CAUSES);
 	const whyHappened = area(fields.whyHappened, FIELD_LIMITS.whyHappened);
 	const howToAvoid = area(fields.howToAvoid, FIELD_LIMITS.howToAvoid);
 
 	row("Subject", subject);
 	row("Concept", concept);
-	const pair = el(doc, "div", "mt-field-pair");
-	form.append(pair);
-	const pairRow = (label: string, control: HTMLElement) => {
-		const wrapper = el(doc, "label", "mt-field");
-		wrapper.append(el(doc, "span", "mt-field-label", label), control);
-		pair.append(wrapper);
-	};
-	pairRow("Mistake type", mistakeType);
-	pairRow("Miss class", missClass);
+	row("Cause", cause);
 	row("Why it happened", whyHappened);
 	row("How to avoid", howToAvoid);
 	form.append(datalist);
@@ -84,8 +75,7 @@ export function createEntryForm(doc: Document, fields: EntryFields, subjects: re
 		read: () => ({
 			subject: subject.value,
 			concept: concept.value,
-			mistakeType: mistakeType.value as EntryFields["mistakeType"],
-			missClass: missClass.value as EntryFields["missClass"],
+			cause: cause.value as EntryFields["cause"],
 			whyHappened: whyHappened.value,
 			howToAvoid: howToAvoid.value,
 		}),
@@ -100,7 +90,7 @@ export type TextMount = (container: HTMLElement, text: string) => void;
 export function renderFields(doc: Document, fields: EntryFields, mountText?: TextMount): HTMLElement {
 	const box = el(doc, "div", "mt-fields");
 	const meta = el(doc, "div", "mt-meta");
-	meta.append(el(doc, "span", "mt-chip", fields.subject), el(doc, "span", "mt-chip", fields.mistakeType), el(doc, "span", "mt-chip mt-chip-muted", fields.missClass));
+	meta.append(el(doc, "span", "mt-chip", fields.subject), el(doc, "span", "mt-chip", fields.cause));
 	const concept = el(doc, "div", "mt-concept mt-text");
 	if (mountText) mountText(concept, fields.concept); else concept.textContent = fields.concept;
 	box.append(concept, meta);
