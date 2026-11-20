@@ -3,6 +3,8 @@ import { CHANGED_TOPIC, mergeFields, pickFields, type Entry } from "./contract.t
 import { PRACTICE_INSTRUCTIONS } from "./instructions.ts";
 import { openStore, pruneEntries, savedSubjects, type Store } from "./store.ts";
 import { createProposeTool } from "./tool.ts";
+import { addImported, exportJson, exportMarkdown, parseJsonExport } from "./transfer.ts";
+import { checkForUpdate, installUpdate, type UpdateInfo } from "./update.ts";
 
 function objectInput(input: unknown): Record<string, unknown> {
 	if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Expected an object input.");
@@ -90,6 +92,39 @@ export function activate(ctx: PluginBackendContext): void {
 		});
 		notify();
 		return { entry: deleted };
+	});
+
+	const stamp = () => new Date().toISOString().slice(0, 10);
+	register("export-markdown", () => ({ filename: `mistracker-${stamp()}.md`, content: exportMarkdown(store.get()) }));
+	register("export-json", () => ({ filename: `mistracker-${stamp()}.json`, content: JSON.stringify(exportJson(store.get()), null, "\t") + "\n" }));
+
+	register("import-json", input => {
+		if (typeof input.text !== "string") throw new Error("Choose a Mistracker JSON export to import.");
+		const entries = parseJsonExport(input.text);
+		const result = store.change(state => addImported(state, entries));
+		if (result.added > 0) notify();
+		return result;
+	});
+
+	/** Version installed by this activation's updater; the running code stays old until restart. */
+	let installedVersion: string | undefined;
+	let checked: UpdateInfo | undefined;
+	let installing = false;
+	register("check-update", async () => {
+		if (installedVersion) return { current: ctx.manifest.version, installed: installedVersion };
+		checked = await checkForUpdate(ctx.manifest.version, fetch, ctx.signal);
+		return { current: ctx.manifest.version, latest: checked.latest, newer: checked.newer };
+	});
+	register("install-update", async () => {
+		if (installedVersion) return { installed: installedVersion };
+		if (!checked?.newer) throw new Error("Check for updates first.");
+		if (installing) throw new Error("An update is already being installed.");
+		const target = checked;
+		installing = true;
+		try { await installUpdate(target, ctx.directory, fetch, ctx.signal); }
+		finally { installing = false; }
+		installedVersion = target.latest;
+		return { installed: installedVersion };
 	});
 
 	/** Undo: a dismissed proposal returns to pending, a deleted entry returns to saved. */

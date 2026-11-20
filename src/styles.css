@@ -90,3 +90,10 @@
   .mt-root .mt-table td[data-label]:not([data-label=""])::before { content: attr(data-label); display: block; font-size: 12px; font-weight: 600; color: var(--muted-foreground, #8889); }
   .mt-root .mt-icon-actions { justify-content: flex-start; }
 }
+
+/* Settings */
+.mt-root.mt-settings { display: flex; flex-direction: column; gap: 20px; }
+.mt-root .mt-settings-title { margin: 0; font-size: 14px; font-weight: 600; }
+.mt-root .mt-settings-text { margin: 2px 0 0; }
+.mt-root .mt-settings-status { margin: 6px 0 0; }
+.mt-root .mt-settings-status:empty { display: none; }
