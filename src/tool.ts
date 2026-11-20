@@ -11,10 +11,10 @@ const parameters = {
 	type: "object",
 	properties: {
 		subject: { type: "string", minLength: 1, maxLength: FIELD_LIMITS.subject, description: "Broad course-level subject, e.g. Statistics, Biology, Machine Learning." },
-		concept: { type: "string", minLength: 1, maxLength: FIELD_LIMITS.concept, description: "Short name for the idea the learner got wrong, a few words. Markdown; math in LaTeX." },
+		concept: { type: "string", minLength: 1, maxLength: FIELD_LIMITS.concept, description: "Short name for the idea the learner got wrong, or for the better method, a few words. Markdown; math in LaTeX." },
 		cause: { type: "string", enum: [...CAUSES], description: `What went wrong: ${CAUSES.map(cause => `"${cause}": ${CAUSE_MEANINGS[cause]}`).join("; ")}.` },
-		whyHappened: { type: "string", minLength: 1, maxLength: FIELD_LIMITS.whyHappened, description: "One or two first-person sentences (\"I…\") naming the wrong assumption. Markdown; math in LaTeX." },
-		howToAvoid: { type: "string", minLength: 1, maxLength: FIELD_LIMITS.howToAvoid, description: "One quick rule or check for next time, starting with the action: one or two sentences or at most 3 short bullets. Markdown; math in LaTeX." },
+		whyHappened: { type: "string", minLength: 1, maxLength: FIELD_LIMITS.whyHappened, description: "One or two first-person sentences (\"I…\") stating the exact step I took and the wrong assumption behind it. Markdown; math in LaTeX." },
+		howToAvoid: { type: "string", minLength: 1, maxLength: FIELD_LIMITS.howToAvoid, description: "One or two plain sentences, no bullets: the cue in a problem that should trigger the fix, and the concrete action to take. Specific to this trap; do not repeat the concept's formula. Markdown; math in LaTeX." },
 	},
 	required: ["subject", "concept", "cause", "whyHappened", "howToAvoid"],
 	additionalProperties: false,
@@ -28,7 +28,7 @@ export function createProposeTool(ctx: PluginBackendContext, store: Store, conte
 	return {
 		name: TOOL_NAME,
 		label: "Propose mistake entry",
-		description: "Propose one mistake-tracker entry for a meaningful thinking gap, right after concluding a problem. The learner confirms or dismisses it; nothing is saved without them." + subjectHint,
+		description: "Propose one mistake-tracker entry for a meaningful thinking gap or a clearly worse method, right after concluding a problem. The learner confirms or dismisses it; nothing is saved without them." + subjectHint,
 		parameters: parameters as never,
 		execute: async (toolCallId, params, signal) => {
 			if (signal?.aborted || ctx.signal.aborted) throw new Error("Mistracker tool cancelled");

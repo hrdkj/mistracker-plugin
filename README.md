@@ -22,7 +22,8 @@ The agent is told to stay quiet unless the miss is worth remembering:
 | A conceptual gap, a misapplied method, or a missing fact or formula | One entry |
 | A one-off arithmetic slip or typo | No |
 | A mistake you caught and fixed yourself before answering | No |
-| A correct answer | No |
+| A correct answer, but with a clearly worse method than the standard one | One entry (Better method) |
+| A correct answer with a sound method | No |
 
 At most one entry per problem, and only after the agent concludes it. The agent reuses
 your existing subjects where they fit, so entries group cleanly. It never mentions the
@@ -31,10 +32,14 @@ tracker in its replies; the card is the only trace.
 Each entry has:
 
 - Subject and concept (the concept renders Markdown and LaTeX)
-- Cause: Misconception, Mix-up, Never learned, Forgot, Didn't apply or Wrong steps.
-  The practice agent picks it to match the miss class it gave when concluding
-- Why it happened and how to avoid it: short, first-person notes written for a quick
-  scan before an exam (Markdown, LaTeX math and code blocks supported)
+- Cause: Misconception, Mix-up, Never learned, Forgot, Didn't apply, Wrong steps or
+  Better method. The practice agent picks it to match the miss class it gave when
+  concluding
+- Why it happened: the exact step you took and the wrong assumption behind it, in one or
+  two first-person sentences
+- How to avoid it: the cue in a problem that should trigger the fix and what to do when
+  you see it, in one or two plain sentences (Markdown, LaTeX math and code blocks
+  supported in every note)
 - The problem statement and a link back to the session. Long problems are clipped to
   about six lines in the library, with a **Show more** toggle
 
@@ -48,6 +53,18 @@ session card. Dismissed and deleted entries are kept for 7 days, then removed fo
 next time LearnHarness starts. Proposals you never save or dismiss are removed the same way,
 7 days after they were proposed.
 
+## Export and import
+
+Mistracker's settings (**Settings → Community plugins → Mistracker**) can export every
+saved entry:
+
+- **Export Markdown:** one file grouped by subject, with each entry's concept, cause, date,
+  problem, why and how to avoid. Read it before an exam or give it to an AI to quiz you.
+- **Export JSON:** an exact copy of every saved entry, for backups.
+
+**Import JSON** reads a JSON export back in. Entries already in your library are skipped; the rest
+are added to your library.
+
 ## Install
 
 Requires LearnHarness **0.6.0** or newer.
@@ -60,8 +77,10 @@ Requires LearnHarness **0.6.0** or newer.
 3. In **Settings → Community plugins**, click **Refresh** and enable **Mistracker**.
 4. Start a **Practice** session. Mistracker appears in the sidebar.
 
-To update, replace `mistracker/dist/` with the new version and restart LearnHarness.
-Your entries live in the sibling `mistracker/data/` folder and are kept.
+To update from 0.3.0 onwards, click **Check for updates** in Mistracker's settings, then
+**Update**, and restart LearnHarness. Nothing is downloaded until you click Update. Older
+versions update by hand: replace `mistracker/dist/` with the new version and restart.
+Either way, your entries live in the sibling `mistracker/data/` folder and are kept.
 
 > Community plugins run with the same access as LearnHarness itself. Install code you trust.
 

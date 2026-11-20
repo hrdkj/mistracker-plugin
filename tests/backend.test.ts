@@ -36,6 +36,8 @@ function setup(dataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "mistracker
 	const registrations: { instructions: unknown[]; tools: { agents: string[]; create: (c: unknown) => any[] }[] } = { instructions: [], tools: [] };
 	const controller = new AbortController();
 	const ctx = {
+		manifest: { id: "mistracker", version: "0.3.0" },
+		directory: path.join(dataDirectory, "..", "dist"),
 		dataDirectory,
 		signal: controller.signal,
 		learning: { getSession: (id: string) => (id === "chat1" ? practiceSession : null) },
@@ -235,4 +237,53 @@ test("instructions ask for short human notes with LaTeX and code formatting", ()
 	assert.match(text, /LaTeX: `\$\.\.\.\$` inline/);
 	assert.match(text, /fenced code blocks with a language tag/);
 	assert.match(text, /`careless`, do not propose/);
+	assert.match(text, /exact step I took and the wrong assumption/);
+	assert.match(text, /no bullets/);
+	assert.match(text, /cause Better method/);
+	assert.doesNotMatch(text, /encode line breaks/, "escaped line breaks made the agent write a literal \\n");
+});
+
+test("the agent can propose a Better method entry", async () => {
+	const { call, tool } = setup();
+	const id = (await tool().execute("b", { ...fields, cause: "Better method" })).details.proposalId;
+	assert.equal((await call("get-proposal", { id })).entry.cause, "Better method");
+	assert.match(JSON.stringify(tool().parameters), /Better method/);
+});
+
+test("exports saved entries and imports a JSON export, skipping entries already present", async () => {
+	const source = setup();
+	const a = (await source.tool().execute("a", fields)).details.proposalId;
+	const b = (await source.tool().execute("b", { ...fields, subject: "Machine Learning", concept: "Bias term" })).details.proposalId;
+	await source.tool().execute("c", fields);
+	await source.call("save-proposal", { id: a });
+	await source.call("save-proposal", { id: b });
+
+	const markdown = await source.call("export-markdown");
+	assert.match(markdown.filename, /^mistracker-\d{4}-\d{2}-\d{2}\.md$/);
+	assert.match(markdown.content, /## Statistics[\s\S]*### Conditional probability direction/);
+	assert.match(markdown.content, /## Machine Learning[\s\S]*### Bias term/);
+	assert.match(markdown.content, /\*\*Problem:\*\*\n\nCompute P\(disease \| positive\)\./);
+	assert.equal(markdown.content.match(/^### /gm)?.length, 2, "pending entries are not exported");
+
+	const json = await source.call("export-json");
+	const target = setup();
+	const first = await target.call("import-json", { text: json.content });
+	assert.deepEqual(first, { added: 2, skipped: 0 });
+	assert.deepEqual((await target.call("list-entries")).entries.map((e: { id: string }) => e.id).sort(), [a, b].sort());
+	assert.ok(target.emitted.length > 0);
+	assert.deepEqual(await target.call("import-json", { text: json.content }), { added: 0, skipped: 2 });
+
+	await target.call("delete-entry", { id: a });
+	assert.deepEqual(await target.call("import-json", { text: json.content }), { added: 1, skipped: 1 }, "a deleted entry comes back from the backup");
+	assert.equal((await target.call("list-entries")).entries.length, 2);
+});
+
+test("import refuses invalid files without changing anything", async () => {
+	const { call } = setup();
+	await assert.rejects(async () => call("import-json", { text: "not json" }), /not a Mistracker JSON export/);
+	await assert.rejects(async () => call("import-json", { text: JSON.stringify({ format: "mistracker-export", version: 9, entries: [] }) }), /newer Mistracker/);
+	const good = { ...fields, id: "x", createdAt: new Date().toISOString() };
+	const bad = { ...fields, id: "y", cause: "careless" };
+	await assert.rejects(async () => call("import-json", { text: JSON.stringify({ format: "mistracker-export", version: 1, entries: [good, bad] }) }), /Entry 2: cause/);
+	assert.equal((await call("list-entries")).entries.length, 0);
 });

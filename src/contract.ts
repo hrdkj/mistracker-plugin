@@ -4,7 +4,7 @@ export const TOOL_NAME = "propose_mistake";
 export const CHANGED_TOPIC = "changed";
 
 /** What went wrong, as the learner reads it. The agent picks one; it is the only classification stored. */
-export const CAUSES = ["Misconception", "Mix-up", "Never learned", "Forgot", "Didn't apply", "Wrong steps"] as const;
+export const CAUSES = ["Misconception", "Mix-up", "Never learned", "Forgot", "Didn't apply", "Wrong steps", "Better method"] as const;
 
 export type Cause = (typeof CAUSES)[number];
 
@@ -16,6 +16,7 @@ export const CAUSE_MEANINGS: Record<Cause, string> = {
 	"Forgot": "they learned it but could not recall it (conclude: cue)",
 	"Didn't apply": "they knew it but did not see that this problem needed it (conclude: cue)",
 	"Wrong steps": "right idea, carried out wrongly (conclude: execution)",
+	"Better method": "they solved it correctly, but with a clearly worse method than the standard one the problem was built around (no miss)",
 };
 
 export type EntryStatus = "pending" | "saved" | "dismissed" | "deleted";
